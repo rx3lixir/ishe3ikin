@@ -7,11 +7,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/go-rod/rod"
 )
 
@@ -44,7 +44,7 @@ func (j *JSONConfigLoader) Load(filePath string) ([]ScrapeConfig, error) {
 	return configs, nil
 }
 
-// Exporter определяет интерфейс для экспорта данных после процесса скраппинга
+// Exporter определяет интерфейс для экспорта данных после процесса скрапинга.
 type Exporter interface {
 	Export(data []map[string]string) error
 }
@@ -54,18 +54,15 @@ type CSVExporter struct {
 }
 
 func (e *CSVExporter) Export(data []map[string]string) error {
-	// Открываем файл для записи
 	file, err := os.Create(e.FileName)
 	if err != nil {
 		return fmt.Errorf("failed to create CSV file: %w", err)
 	}
 	defer file.Close()
 
-	// Создаём CSV writer
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Пишем заголовок
 	if len(data) > 0 {
 		headers := make([]string, 0, len(data[0]))
 		for key := range data[0] {
@@ -76,7 +73,6 @@ func (e *CSVExporter) Export(data []map[string]string) error {
 		}
 	}
 
-	// Пишем строки данных
 	for _, record := range data {
 		row := make([]string, 0, len(record))
 		for _, value := range record {
@@ -99,20 +95,22 @@ type Scraper interface {
 type RodScraper struct {
 	Config  ScrapeConfig
 	Browser *rod.Browser
+	Logger  *log.Logger
 }
 
-// NewRodScraper создает новый RodScraper.
-func NewRodScraper(browser *rod.Browser, config ScrapeConfig) *RodScraper {
+func NewRodScraper(browser *rod.Browser, config ScrapeConfig, logger *log.Logger) *RodScraper {
 	return &RodScraper{
 		Config:  config,
 		Browser: browser,
+		Logger:  logger,
 	}
 }
 
 func (r *RodScraper) Scrape(ctx context.Context) (map[string]string, error) {
+	r.Logger.Info("Starting scrape", "url", r.Config.URL)
 	page := r.Browser.MustPage()
 
-	err := page.Navigate(r.Config.URL)
+	err := page.Context(ctx).Navigate(r.Config.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to navigate to page: %v", r.Config.URL)
 	}
@@ -126,7 +124,9 @@ func (r *RodScraper) Scrape(ctx context.Context) (map[string]string, error) {
 
 		element, err := page.Timeout(time.Second * 10).Element(selector)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find selector '%s': %w", selector, err)
+			r.Logger.Warn("Failed to find selector", "selector", selector, "error", err)
+			results[key] = ""
+			continue
 		}
 
 		text, err := element.Text()
@@ -137,26 +137,26 @@ func (r *RodScraper) Scrape(ctx context.Context) (map[string]string, error) {
 		results[key] = text
 	}
 
+	r.Logger.Info("Scraping completed", "url", r.Config.URL)
 	return results, nil
 }
 
 // TaskRunner управляет выполнением задач скрапинга.
 type TaskRunner struct {
-	Scrapers []Scraper
+	Tasks  []Scraper
+	Logger *log.Logger
 }
 
-// NewTaskRunner создает TaskRunner.
-func NewTaskRunner(scrapers []Scraper) *TaskRunner {
-	return &TaskRunner{Scrapers: scrapers}
+func NewTaskRunner(scrapeTasks []Scraper, logger *log.Logger) *TaskRunner {
+	return &TaskRunner{Tasks: scrapeTasks, Logger: logger}
 }
 
-// Run запускает все задачи скрапинга.
 func (t *TaskRunner) Run(ctx context.Context) ([]map[string]string, []error) {
 	var wg sync.WaitGroup
 	resultsChan := make(chan map[string]string)
 	errorsChan := make(chan error)
 
-	for _, scraper := range t.Scrapers {
+	for _, scraper := range t.Tasks {
 		wg.Add(1)
 		go func(s Scraper) {
 			defer wg.Done()
@@ -169,7 +169,6 @@ func (t *TaskRunner) Run(ctx context.Context) ([]map[string]string, []error) {
 		}(scraper)
 	}
 
-	// Закрытие каналов после завершения всех задач.
 	go func() {
 		wg.Wait()
 		close(resultsChan)
@@ -179,7 +178,6 @@ func (t *TaskRunner) Run(ctx context.Context) ([]map[string]string, []error) {
 	var results []map[string]string
 	var errorList []error
 
-	// Чтение результатов и ошибок.
 	for {
 		select {
 		case res, ok := <-resultsChan:
@@ -211,59 +209,54 @@ func main() {
 	configPath := flag.String("c", "", "Path to config file")
 	timeout := flag.Int("t", 30, "Timeout for each scraping task in seconds")
 	outputPath := flag.String("o", "output.csv", "Path to output file")
-
-	// Чтение флагов командной строки.
 	flag.Parse()
 
+	logger := log.NewWithOptions(os.Stderr, log.Options{
+		ReportCaller:    true,
+		ReportTimestamp: true,
+		TimeFormat:      time.Kitchen,
+	})
+	logger.Info("Application started")
+
 	if *configPath == "" {
-		slog.Error("no config file provided. use -c to specify config path")
-		os.Exit(1)
+		logger.Fatal("No config file provided. Use -c to specify config path")
 	}
 
-	// Загрузка конфигурации.
 	loader := &JSONConfigLoader{}
 	configs, err := loader.Load(*configPath)
 	if err != nil {
-		slog.Error("failed to load config", slog.String("error", err.Error()))
-		os.Exit(1)
+		logger.Fatal("Failed to load config", "error", err)
 	}
 
-	// Подключение к браузеру.
 	browser := rod.New().NoDefaultDevice()
 	if err := browser.Connect(); err != nil {
-		slog.Error("failed to connect to browser", slog.String("error", err.Error()))
-		os.Exit(1)
+		logger.Fatal("Failed to connect to browser", "error", err)
 	}
 	defer browser.Close()
 
-	// Создание скрапера для каждой конфигурации.
 	var tasks []Scraper
 	for _, config := range configs {
-		tasks = append(tasks, NewRodScraper(browser, config))
+		tasks = append(tasks, NewRodScraper(browser, config, logger))
 	}
 
-	// Выполнение задач через TaskRunner.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
-	runner := NewTaskRunner(tasks)
+	runner := NewTaskRunner(tasks, logger)
 	results, errors := runner.Run(ctx)
 
-	// Вывод результатов.
 	for _, res := range results {
-		fmt.Println("Scraping results:", res)
+		logger.Info("Scraping results", "data", res)
 	}
 
-	// Обработка ошибок.
 	for _, err := range errors {
-		slog.Error("scraping error", slog.String("error", err.Error()))
+		logger.Error("Scraping error", "error", err)
 	}
 
-	// Экспортируем данные скраппинга
 	exporter := &CSVExporter{FileName: *outputPath}
 	if err := exporter.Export(results); err != nil {
-		fmt.Printf("Failed to export data: %v\n", err)
+		logger.Error("Failed to export data", "error", err)
 	} else {
-		fmt.Println("Data exported successfully")
+		logger.Info("Data exported successfully")
 	}
 }
