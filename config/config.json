@@ -1,0 +1,38 @@
+[
+  {
+    "URL": "https://planetarium22.ru/timetable/",
+    "Type": "ПланетарийБиблиотека",
+    "Selectors": {
+      "TitleSelector": "div.mibok-name-lesson",
+      "DateSelector": "div.mibok-time span.lesson-time-info",
+      "LinkSelector": ""
+    }
+  },
+  {
+    "URL": "https://xn--22-6kcuxa1aa9ax.xn--p1ai/",
+    "Type": "Клубы",
+    "Selectors": {
+      "TitleSelector": "div.js-store-prod-name.js-store-product-name.t-store__card__title",
+      "DateSelector": "div.js-store-prod-descr.t-store__card__descr",
+      "LinkSelector": "a"
+    }
+  },
+  {
+    "URL": "https://brn.quizplease.ru/schedule",
+    "Type": "Клубы",
+    "Selectors": {
+      "TitleSelector": "div.h2.h2-game-card.h2-left",
+      "DateSelector": "div.h3.h3-green.h3-mb10.block-date-with-language-game.game-active",
+      "LinkSelector": "a.schedule-block-head.w-inline-block"
+    }
+  },
+  {
+    "URL": "https://tangoamigos.ru",
+    "Type": "Клубы",
+    "Selectors": {
+      "TitleSelector": "h4.title-day",
+      "DateSelector": "li.times.uk-grid-small.uk-flex-nowrap.uk-flex-between.uk-grid",
+      "LinkSelector": ""
+    }
+  }
+]
