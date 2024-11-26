@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/stealth"
 	"github.com/rx3lixir/ish3ikin/internal/config/taskconfig"
 )
 
@@ -33,36 +34,62 @@ type Scraper interface {
 }
 
 func (r *RodScraper) Scrape(ctx context.Context) (map[string]string, error) {
-	r.Logger.Info("🌐Starting scraping", "url:", r.Tasks.URL)
-	page := r.Browser.MustPage()
+	r.Logger.Info("🌐 Starting scraping", "url:", r.Tasks.URL)
 
-	err := page.Navigate(r.Tasks.URL)
+	// Создаём новую страницу с использованием stealth
+	page, err := stealth.Page(r.Browser)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create page: %v", r.Tasks.URL)
+	}
+
+	// Навигация на указанный URL
+	err = page.Navigate(r.Tasks.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to navigate to page: %v", r.Tasks.URL)
 	}
 
+	// Ожидание полной загрузки страницы
+	err = page.WaitLoad()
+	if err != nil {
+		r.Logger.Warn("⭕ Page did not load fully", "url:", r.Tasks.URL, "error:", err)
+	}
+
+	// Создаём результаты
 	results := make(map[string]string)
+
+	// Проходимся по селекторам из конфигурации
 	for key, selector := range r.Tasks.Selectors {
+		// Пропускаем пустые селекторы
 		if selector == "" {
 			results[key] = ""
 			continue
 		}
 
-		element, err := page.Timeout(time.Second * 10).Element(selector)
-		if err != nil {
-			r.Logger.Warn("⭕Failed to find selector", "selector:", selector, "error:", err)
+		// Получение всех элементов по селектору
+		elements, err := page.Elements(selector)
+		if err != nil || len(elements) == 0 {
+			r.Logger.Warn("⭕ No elements found", "selector:", selector, "error:", err)
 			results[key] = ""
 			continue
 		}
 
-		text, err := element.Text()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get text for selector '%s': %w", selector, err)
+		// Сбор текста всех найденных элементов
+		var texts []string
+		for _, element := range elements {
+			text, err := element.Text()
+			if err != nil {
+				r.Logger.Warn("⭕ Failed to get text for element", "selector:", selector, "error:", err)
+				continue
+			}
+			texts = append(texts, text)
 		}
 
-		results[key] = text
+		// Объединяем тексты с разделителем (например, перенос строки)
+		results[key] = strings.Join(texts, "\n")
+		r.Logger.Info("✅ Successfully scraped", "key:", key, "count:", len(texts))
 	}
 
+	// Возвращаем результаты
 	return results, nil
 }
 

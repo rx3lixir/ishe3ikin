@@ -5,6 +5,7 @@ go 1.23.3
 require (
 	github.com/charmbracelet/log v0.4.0
 	github.com/go-rod/rod v0.116.2
+	github.com/go-rod/stealth v0.4.9
 )
 
 require (

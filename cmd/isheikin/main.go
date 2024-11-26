@@ -60,6 +60,6 @@ func main() {
 	if err := exporter.Export(results); err != nil {
 		logger.Fatalf("Failed to export data: %v", err)
 	} else {
-		logger.Info("✅Data exported succesfuly!")
+		logger.Info("✅data exported succesfuly!")
 	}
 }
