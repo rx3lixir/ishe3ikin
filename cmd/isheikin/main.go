@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
-	"github.com/rx3lixir/icheikin/internal/config/appconfig"
-	"github.com/rx3lixir/icheikin/internal/config/taskconfig"
-	"github.com/rx3lixir/icheikin/internal/exporter/csv"
-	"github.com/rx3lixir/icheikin/internal/lib/logger"
-	"github.com/rx3lixir/icheikin/internal/scraper"
+	"github.com/rx3lixir/ish3ikin/internal/config/appconfig"
+	"github.com/rx3lixir/ish3ikin/internal/config/taskconfig"
+	"github.com/rx3lixir/ish3ikin/internal/exporter/csv"
+	"github.com/rx3lixir/ish3ikin/internal/lib/logger"
+	"github.com/rx3lixir/ish3ikin/internal/scraper"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/go-rod/rod"
-	"github.com/rx3lixir/icheikin/internal/config/taskconfig"
+	"github.com/rx3lixir/ish3ikin/internal/config/taskconfig"
 )
 
 type RodScraper struct {

@@ -1,4 +1,4 @@
-module github.com/rx3lixir/icheikin
+module github.com/rx3lixir/ish3ikin
 
 go 1.23.3
 
