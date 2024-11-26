@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -41,6 +42,52 @@ func (j *JSONConfigLoader) Load(filePath string) ([]ScrapeConfig, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 	return configs, nil
+}
+
+// Exporter определяет интерфейс для экспорта данных после процесса скраппинга
+type Exporter interface {
+	Export(data []map[string]string) error
+}
+
+type CSVExporter struct {
+	FileName string
+}
+
+func (e *CSVExporter) Export(data []map[string]string) error {
+	// Открываем файл для записи
+	file, err := os.Create(e.FileName)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %w", err)
+	}
+	defer file.Close()
+
+	// Создаём CSV writer
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Пишем заголовок
+	if len(data) > 0 {
+		headers := make([]string, 0, len(data[0]))
+		for key := range data[0] {
+			headers = append(headers, key)
+		}
+		if err := writer.Write(headers); err != nil {
+			return fmt.Errorf("failed to write CSV headers: %w", err)
+		}
+	}
+
+	// Пишем строки данных
+	for _, record := range data {
+		row := make([]string, 0, len(record))
+		for _, value := range record {
+			row = append(row, value)
+		}
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Scraper определяет интерфейс для выполнения задач скрапинга.
@@ -161,9 +208,11 @@ func (t *TaskRunner) Run(ctx context.Context) ([]map[string]string, []error) {
 }
 
 func main() {
-	// Чтение флагов командной строки.
 	configPath := flag.String("c", "", "Path to config file")
 	timeout := flag.Int("t", 30, "Timeout for each scraping task in seconds")
+	outputPath := flag.String("o", "output.csv", "Path to output file")
+
+	// Чтение флагов командной строки.
 	flag.Parse()
 
 	if *configPath == "" {
@@ -188,16 +237,16 @@ func main() {
 	defer browser.Close()
 
 	// Создание скрапера для каждой конфигурации.
-	var scrapers []Scraper
+	var tasks []Scraper
 	for _, config := range configs {
-		scrapers = append(scrapers, NewRodScraper(browser, config))
+		tasks = append(tasks, NewRodScraper(browser, config))
 	}
 
 	// Выполнение задач через TaskRunner.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
-	runner := NewTaskRunner(scrapers)
+	runner := NewTaskRunner(tasks)
 	results, errors := runner.Run(ctx)
 
 	// Вывод результатов.
@@ -208,5 +257,13 @@ func main() {
 	// Обработка ошибок.
 	for _, err := range errors {
 		slog.Error("scraping error", slog.String("error", err.Error()))
+	}
+
+	// Экспортируем данные скраппинга
+	exporter := &CSVExporter{FileName: *outputPath}
+	if err := exporter.Export(results); err != nil {
+		fmt.Printf("Failed to export data: %v\n", err)
+	} else {
+		fmt.Println("Data exported successfully")
 	}
 }
