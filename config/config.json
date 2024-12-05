@@ -2,6 +2,7 @@
   {
     "URL": "https://www.afisha.ru/barnaul/schedule_cinema/",
     "Type": "Кино",
+    "Name": "Афиша концерты",
     "Selectors": {
       "Title": "a.CjnHd.y8A5E.nbCNS.yknrM",
       "Genre": "div.S_wwn"

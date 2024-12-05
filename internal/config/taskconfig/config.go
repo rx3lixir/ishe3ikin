@@ -8,10 +8,10 @@ import (
 
 // TaskConfig описывает конфигурацию для скрапинга.
 type TaskConfig struct {
-	URL       string
-	Type      string
-	Name      string
-	Selectors map[string]string
+	URL       string            `json:"URL"`
+	Type      string            `json:"Type"`
+	Name      string            `json:"Name"`
+	Selectors map[string]string `json:"Selectors"`
 }
 
 // Loader определяет интерфейс загрузки конфигурации.
