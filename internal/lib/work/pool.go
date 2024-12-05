@@ -1,62 +1,51 @@
 package work
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"sync"
 )
 
-type Task interface {
-	Execute() (interface{}, error)
+type Executor interface {
+	Execute() error
+	OnError(error)
 }
 
-type WorkerPool struct {
-	resultChan  chan interface{}
-	taskQueue   chan Task
-	workerCount int
-	wg          sync.WaitGroup
+type Pool struct {
+	numWorkers     int
+	tasks          chan Executor
+	tasksCompleted chan bool
+	start          sync.Once
+	stop           sync.Once
+	quit           chan struct{}
+	wg             sync.WaitGroup
 }
 
-func NewWorkerPool(workerCount int, queueSize int) *WorkerPool {
-	return &WorkerPool{
-		taskQueue:   make(chan Task, queueSize),
-		workerCount: workerCount,
-		resultChan:  make(chan interface{}, queueSize),
+// Создает новый пул воркеров с заданными параметрами
+func NewPool(numWorkers int, taskChannelSize int) (*Pool, error) {
+	if numWorkers <= 0 || taskChannelSize <= 0 {
+		return nil, errors.New("Invalid parameters: number of workers and tasks must be more than zero")
 	}
+	return &Pool{
+		numWorkers:     numWorkers,
+		tasks:          make(chan Executor, taskChannelSize),
+		tasksCompleted: make(chan bool),
+		start:          sync.Once{},
+		stop:           sync.Once{},
+		quit:           make(chan struct{}),
+	}, nil
 }
 
-func (wp *WorkerPool) Run() {
-	for i := 0; i < wp.workerCount; i++ {
-		wp.wg.Add(1)
-		go wp.worker(i)
-	}
+func (p *Pool) Start(ctx context.Context) {
+	p.start.Do(func() {
+		//p.startWorker(ctx)
+	})
 }
 
-func (wp *WorkerPool) Results() <-chan interface{} {
-	return wp.resultChan
-}
-
-func (wp *WorkerPool) AddTask(task Task) {
-	wp.taskQueue <- task
-}
-
-func (wp *WorkerPool) Shutdown() {
-	close(wp.taskQueue)
-	wp.wg.Wait()
-	close(wp.resultChan)
-}
-
-func (wp *WorkerPool) worker(id int) {
-	defer wp.wg.Done()
-
-	for task := range wp.taskQueue {
-		fmt.Printf("Worker %d processing task...\n", id)
-		result, err := task.Execute()
-		if err != nil {
-			fmt.Printf("Worker %d encountered an error: %v\n", id, err)
-		} else {
-			wp.resultChan <- result
-		}
-	}
-
-	fmt.Printf("Worker %d shutting down.\n", id)
+func (p *Pool) Stop() {
+	p.stop.Do(func() {
+		close(p.quit)
+		p.wg.Wait()
+		close(p.tasksCompleted)
+	})
 }

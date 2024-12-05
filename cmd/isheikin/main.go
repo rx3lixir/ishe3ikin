@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -9,12 +10,11 @@ import (
 	"github.com/rx3lixir/ish3ikin/internal/config/appconfig"
 	"github.com/rx3lixir/ish3ikin/internal/config/taskconfig"
 	"github.com/rx3lixir/ish3ikin/internal/lib/logger"
-	"github.com/rx3lixir/ish3ikin/internal/lib/work"
 	"github.com/rx3lixir/ish3ikin/internal/scraper"
 )
 
 const (
-	workerCount = 1
+	workerCount = 5
 )
 
 func main() {
@@ -42,40 +42,43 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*time.Duration(cfg.Timeout)))
 	defer cancel()
 
-	// Определяем длину очереди для воркер пула
-	queueSize := len(loadedTasks)
+	taskChan := make(chan taskconfig.TaskConfig)
+	resChan := make(chan interface{})
 
-	pool := work.NewWorkerPool(workerCount, queueSize)
-	pool.Run()
+	var wg sync.WaitGroup
 
-	for _, task := range loadedTasks {
-		scrapeTask := &ScrapeTask{
-			ctx:     ctx,
-			browser: browser,
-			task:    task,
-			logger:  logger,
+	// Запуск воркеров
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go worker(ctx, browser, taskChan, resChan, logger, &wg)
+	}
+
+	// Отправка задач в цикл
+	go func() {
+		for _, task := range loadedTasks {
+			taskChan <- task
 		}
-		pool.AddTask(scrapeTask)
-	}
+		close(taskChan)
+	}()
 
-	pool.Shutdown()
+	go func() {
+		for res := range resChan {
+			logger.Print("Result:", res)
+		}
+	}()
+	wg.Wait()
+	close(resChan)
 }
 
-// ScrapeTask реализует интерфейс Task.
-type ScrapeTask struct {
-	ctx     context.Context
-	browser *rod.Browser
-	task    taskconfig.TaskConfig
-	logger  *log.Logger
-}
-
-func (st *ScrapeTask) Execute() (interface{}, error) {
-	scraper := scraper.NewRodScraper(st.browser, st.task, st.logger)
-	res, err := scraper.Scrape(st.ctx)
-	if err != nil {
-		st.logger.Error("Error scraping items", err)
-		return nil, err
+func worker(ctx context.Context, browser *rod.Browser, taskChan <-chan taskconfig.TaskConfig, resultChan chan<- interface{}, logger *log.Logger, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for task := range taskChan {
+		scraper := scraper.NewRodScraper(browser, task, logger)
+		res, err := scraper.Scrape(ctx)
+		if err != nil {
+			logger.Error("Error scraping items", err)
+			continue
+		}
+		resultChan <- res
 	}
-	st.logger.Printf("Founded items: %v", res)
-	return res, nil
 }
