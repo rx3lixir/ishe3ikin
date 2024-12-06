@@ -7,7 +7,7 @@ import (
 )
 
 // TaskConfig описывает конфигурацию для скрапинга.
-type TaskConfig struct {
+type Task struct {
 	URL       string            `json:"URL"`
 	Type      string            `json:"Type"`
 	Name      string            `json:"Name"`
@@ -15,20 +15,24 @@ type TaskConfig struct {
 }
 
 // Loader определяет интерфейс загрузки конфигурации.
-type Loader interface {
-	Load(filePath string) ([]TaskConfig, error)
+type ConfigLoader interface {
+	Load(filePath string) ([]Task, error)
 }
 
 // JSONConfigLoader реализует загрузку из JSON.
 type JSONTasksLoader struct{}
 
-func (j *JSONTasksLoader) Load(filePath string) ([]TaskConfig, error) {
+func NewJSONLoader() *JSONTasksLoader {
+	return &JSONTasksLoader{}
+}
+
+func (j *JSONTasksLoader) Load(filePath string) ([]Task, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var configs []TaskConfig
+	var configs []Task
 	if err := json.Unmarshal(data, &configs); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}

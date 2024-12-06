@@ -11,24 +11,25 @@ import (
 	"github.com/rx3lixir/ish3ikin/internal/config/taskconfig"
 )
 
-type RodScraper struct {
-	Tasks   taskconfig.TaskConfig
-	Browser *rod.Browser
-	Logger  *log.Logger
+type Scraper interface {
+	Scrape(ctx context.Context, task taskconfig.Task) (map[string]string, error)
 }
 
-// NewRodScraper создает новый RodScraper.
-func NewRodScraper(browser *rod.Browser, config taskconfig.TaskConfig, logger *log.Logger) *RodScraper {
+type RodScraper struct {
+	Browser *rod.Browser
+	Logger  log.Logger
+}
+
+func NewRodScraper(browser *rod.Browser, logger log.Logger) *RodScraper {
 	return &RodScraper{
-		Tasks:   config,
 		Browser: browser,
 		Logger:  logger,
 	}
 }
 
 // Scrape выполняет скрапинг и возвращает результаты.
-func (r *RodScraper) Scrape(ctx context.Context) (map[string]string, error) {
-	r.Logger.Info("🌐 Starting scraping", "url:", r.Tasks.URL)
+func (r *RodScraper) Scrape(ctx context.Context, task taskconfig.Task) (map[string]string, error) {
+	r.Logger.Info("🌐 Starting scraping", "url:", task.URL)
 
 	select {
 	case <-ctx.Done():
@@ -47,21 +48,21 @@ func (r *RodScraper) Scrape(ctx context.Context) (map[string]string, error) {
 	default:
 	}
 
-	err = page.Navigate(r.Tasks.URL)
+	err = page.Navigate(task.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to navigate to page: %v", err)
 	}
 
 	err = page.WaitLoad()
 	if err != nil {
-		r.Logger.Warn("⭕ Page did not load fully", "url:", r.Tasks.URL, "error:", err)
+		r.Logger.Warn("⭕ Page did not load fully", "url:", task.URL, "error:", err)
 	}
 
 	results := make(map[string]string)
-	results["URL"] = r.Tasks.URL
-	results["Type"] = r.Tasks.Type
+	results["URL"] = task.URL
+	results["Type"] = task.Type
 
-	for key, selector := range r.Tasks.Selectors {
+	for key, selector := range task.Selectors {
 		select {
 		case <-ctx.Done():
 			r.Logger.Warn("⭕ Scraping canceled during selector processing", "key:", key)
