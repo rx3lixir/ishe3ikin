@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	numWorkers = 5
+	numWorkers = 6
 )
 
 func main() {
@@ -44,8 +44,10 @@ func main() {
 	}
 	defer browser.Close()
 
+	// Создаем новый скраппер
 	scraper := scrp.NewRodScraper(browser, *logger)
 
+	// Инициализируем воркерпул
 	pool, err := work.NewPool(numWorkers, len(tasks))
 	if err != nil {
 		log.Fatalf("Failed to create worker pool: %v", err)
@@ -53,11 +55,13 @@ func main() {
 
 	pool.Start(ctx)
 
+	// Добавляем задачи
 	for _, task := range tasks {
 		scraperTask := scrp.NewScraperTask(task, ctx, scraper, *logger)
 		pool.AddTask(scraperTask)
 	}
 
+	// Выводим результаты
 	go func() {
 		for res := range pool.Results() {
 			logger.Printf("Got results: %v\n", res)

@@ -1,5 +1,14 @@
 [
   {
+    "URL": "https://котокафе22.рф/#events",
+    "Type": "Клубы",
+    "Name": "Котокафе",
+    "Selectors": {
+      "Title": "div.js-store-prod-name",
+      "Date": "div.js-store-prod-descr"
+    }
+  },
+  {
     "URL": "https://www.afisha.ru/barnaul/schedule_cinema/",
     "Type": "Кино",
     "Name": "Афиша Кино",
