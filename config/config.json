@@ -1,11 +1,10 @@
 [
   {
-    "URL": "https://котокафе22.рф/#events",
+    "URL": "https://котокафе22.рф",
     "Type": "Клубы",
     "Name": "Котокафе",
     "Selectors": {
-      "Title": "div.js-store-prod-name",
-      "Date": "div.js-store-prod-descr"
+      "Title": ""
     }
   },
   {
